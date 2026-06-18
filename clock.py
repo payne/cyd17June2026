@@ -17,8 +17,25 @@ import time
 from machine import Pin, SPI, RTC
 from ili9341 import ILI9341
 
-WIFI_SSID = "YOUR_SSID_HERE"
-WIFI_PASSWORD = "YOUR_PASSWORD_HERE"
+
+def load_env(path=".env"):
+    env = {}
+    try:
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, val = line.partition("=")
+                env[key.strip()] = val.strip()
+    except OSError:
+        pass
+    return env
+
+
+_env = load_env()
+WIFI_SSID = _env.get("WIFI_SSID", "")
+WIFI_PASSWORD = _env.get("WIFI_PASSWORD", "")
 
 # Set to your UTC offset in seconds. Central US (CST=-6, CDT=-5).
 # Omaha is currently on Central Daylight Time (UTC-5) in June.
