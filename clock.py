@@ -51,7 +51,11 @@ def connect_wifi():
     wlan.active(True)
     if not wlan.isconnected():
         print("Connecting to Wi-Fi...")
-        wlan.connect(WIFI_SSID, WIFI_PASSWORD)
+        try:
+            wlan.connect(WIFI_SSID, WIFI_PASSWORD)
+        except OSError as e:
+            print("Wi-Fi connect failed:", e)
+            return False
         timeout = 15
         while not wlan.isconnected() and timeout > 0:
             time.sleep(1)
