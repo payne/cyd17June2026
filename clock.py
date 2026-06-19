@@ -93,6 +93,30 @@ def setup_display():
     return display
 
 
+def _draw_clock_frame(display, last_drawn):
+    lt = local_time()
+    time_str = "{:02d}:{:02d}:{:02d}".format(lt[3], lt[4], lt[5])
+    date_str = "{:04d}-{:02d}-{:02d}".format(lt[0], lt[1], lt[2])
+
+    if time_str != last_drawn:
+        display.fill_rect(0, 80, display.width, 60, BG_COLOR)
+        display.text(time_str, 60, 90, TEXT_COLOR, scale=4)
+        display.text(date_str, 80, 150, DATE_COLOR, scale=2)
+        last_drawn = time_str
+
+    return last_drawn
+
+
+def run_for(display, seconds):
+    """Show the clock, updating once a second, for `seconds` seconds."""
+    display.fill(BG_COLOR)
+    last_drawn = ""
+    end = time.time() + seconds
+    while time.time() < end:
+        last_drawn = _draw_clock_frame(display, last_drawn)
+        time.sleep_ms(200)
+
+
 def main():
     display = setup_display()
     display.text("Connecting WiFi...", 10, 10, 0xFFFF)
@@ -111,16 +135,7 @@ def main():
 
     last_drawn = ""
     while True:
-        lt = local_time()
-        time_str = "{:02d}:{:02d}:{:02d}".format(lt[3], lt[4], lt[5])
-        date_str = "{:04d}-{:02d}-{:02d}".format(lt[0], lt[1], lt[2])
-
-        if time_str != last_drawn:
-            display.fill_rect(0, 80, display.width, 60, BG_COLOR)
-            display.text(time_str, 60, 90, TEXT_COLOR, scale=4)
-            display.text(date_str, 80, 150, DATE_COLOR, scale=2)
-            last_drawn = time_str
-
+        last_drawn = _draw_clock_frame(display, last_drawn)
         time.sleep_ms(200)
 
 
