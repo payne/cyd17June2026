@@ -83,15 +83,18 @@ def wrap_text(text, max_chars):
     return lines
 
 
+MARGIN = 5
+
+
 def draw_quote(display, quote, scale=2):
     display.fill_rect(0, 0, display.width, display.height, BG_COLOR)
-    max_chars = display.width // (8 * scale)
+    max_chars = (display.width - 2 * MARGIN) // (8 * scale)
     lines = wrap_text(quote, max_chars)
     line_height = 8 * scale + 6
     total_h = len(lines) * line_height
     y = max(10, (display.height - total_h) // 2)
     for line in lines:
-        x = max(5, (display.width - len(line) * 8 * scale) // 2)
+        x = max(MARGIN, (display.width - len(line) * 8 * scale) // 2)
         display.text(line, x, y, TEXT_COLOR, scale=scale)
         y += line_height
 
