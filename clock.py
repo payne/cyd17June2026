@@ -1,7 +1,8 @@
 """
 CYD (ESP32-2432S028R) clock display.
 Syncs time over NTP at boot, then redraws the clock each second using
-the ESP32's internal RTC.
+the ESP32's internal RTC. Records the NTP sync time to a local file and
+shows it at the bottom of the display.
 
 Pinout for the most common ESP32-2432S028R revision:
   TFT_MOSI = 13
@@ -14,6 +15,12 @@ Pinout for the most common ESP32-2432S028R revision:
 import network
 import ntptime
 import time
+
+try:
+    import ujson as json
+except ImportError:
+    import json
+
 from machine import Pin, SPI, RTC
 from ili9341 import ILI9341
 
@@ -44,6 +51,27 @@ UTC_OFFSET_SECONDS = -5 * 3600
 BG_COLOR = 0x0000      # black
 TEXT_COLOR = 0xFFE0    # yellow
 DATE_COLOR = 0x07FF    # cyan
+SYNC_COLOR = 0x07E0    # green
+
+NTP_STATE_FILE = "ntp_state.json"
+
+
+def _load_ntp_sync():
+    """Return UTC epoch of last successful NTP sync, or None."""
+    try:
+        with open(NTP_STATE_FILE) as f:
+            state = json.loads(f.read())
+        return state.get("last_sync_utc")
+    except Exception:
+        return None
+
+
+def _save_ntp_sync(epoch):
+    try:
+        with open(NTP_STATE_FILE, "w") as f:
+            f.write(json.dumps({"last_sync_utc": epoch}))
+    except Exception:
+        pass
 
 
 def connect_wifi():
@@ -70,6 +98,7 @@ def connect_wifi():
 def sync_time():
     try:
         ntptime.settime()  # sets RTC to UTC
+        _save_ntp_sync(time.time())
         print("Time synced via NTP")
         return True
     except Exception as e:
@@ -93,27 +122,38 @@ def setup_display():
     return display
 
 
-def _draw_clock_frame(display, last_drawn):
+def _ntp_sync_label(sync_epoch):
+    if sync_epoch is None:
+        return "NTP: never"
+    lt = time.localtime(sync_epoch + UTC_OFFSET_SECONDS)
+    return "NTP {:04d}-{:02d}-{:02d} {:02d}:{:02d}".format(
+        lt[0], lt[1], lt[2], lt[3], lt[4])
+
+
+def _draw_clock_frame(display, last_drawn, ntp_label):
     lt = local_time()
     time_str = "{:02d}:{:02d}:{:02d}".format(lt[3], lt[4], lt[5])
     date_str = "{:04d}-{:02d}-{:02d}".format(lt[0], lt[1], lt[2])
 
     if time_str != last_drawn:
-        display.fill_rect(0, 80, display.width, 60, BG_COLOR)
+        display.fill_rect(0, 80, display.width, 145, BG_COLOR)
         display.text(time_str, 60, 90, TEXT_COLOR, scale=4)
         display.text(date_str, 80, 150, DATE_COLOR, scale=2)
+        display.text(ntp_label, 80, 200, SYNC_COLOR, scale=1)
         last_drawn = time_str
 
     return last_drawn
 
 
 def run_for(display, seconds):
-    """Show the clock, updating once a second, for `seconds` seconds."""
+    """Show the clock with last NTP sync time, updating once a second, for `seconds` seconds."""
     display.fill(BG_COLOR)
+
+    ntp_label = _ntp_sync_label(_load_ntp_sync())
     last_drawn = ""
     end = time.time() + seconds
     while time.time() < end:
-        last_drawn = _draw_clock_frame(display, last_drawn)
+        last_drawn = _draw_clock_frame(display, last_drawn, ntp_label)
         time.sleep_ms(200)
 
 
@@ -133,9 +173,10 @@ def main():
 
     display.fill(BG_COLOR)
 
+    ntp_label = _ntp_sync_label(_load_ntp_sync())
     last_drawn = ""
     while True:
-        last_drawn = _draw_clock_frame(display, last_drawn)
+        last_drawn = _draw_clock_frame(display, last_drawn, ntp_label)
         time.sleep_ms(200)
 
 

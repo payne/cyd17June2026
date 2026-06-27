@@ -1,7 +1,8 @@
 """
 CYD (ESP32-2432S028R) Chuck Norris quote display.
-Shows a random Chuck Norris joke from a built-in list, swapping to a new
-one every 20 seconds, with a countdown timer in the top-right corner.
+Shows a Chuck Norris joke, preferring quotes with a low shown count, swapping
+to a new one every 20 seconds with a countdown timer in the top-right corner.
+Fetches additional quotes from the internet and caches them locally.
 
 Pinout for the most common ESP32-2432S028R revision:
   TFT_MOSI = 13
@@ -13,6 +14,12 @@ Pinout for the most common ESP32-2432S028R revision:
 """
 import random
 import time
+
+try:
+    import ujson as json
+except ImportError:
+    import json
+
 from machine import Pin, SPI
 from ili9341 import ILI9341
 
@@ -21,6 +28,8 @@ TEXT_COLOR = 0xFFE0    # yellow
 TIMER_COLOR = 0x07FF   # cyan
 
 QUOTE_INTERVAL_S = 20
+STATE_FILE = "chuck_state.json"
+MAX_CACHED_QUOTES = 200
 
 QUOTES = [
     "Chuck Norris can divide by zero.",
@@ -54,6 +63,44 @@ QUOTES = [
     "Chuck Norris can make a clock tick faster just by staring at it.",
     "Chuck Norris doesn't need a parachute. He just holds his breath and falls slower.",
 ]
+
+
+def _load_state():
+    """Load quotes and shown counts from cache file, merging built-in quotes."""
+    try:
+        with open(STATE_FILE) as f:
+            state = json.loads(f.read())
+        for q in QUOTES:
+            if q not in state["quotes"]:
+                state["quotes"].append(q)
+                state["counts"].append(0)
+        return state
+    except Exception:
+        return {"quotes": list(QUOTES), "counts": [0] * len(QUOTES)}
+
+
+def _save_state(state):
+    try:
+        with open(STATE_FILE, "w") as f:
+            f.write(json.dumps(state))
+    except Exception:
+        pass
+
+
+def _fetch_quote():
+    """Fetch one quote from the ChuckNorris API. Returns str or None."""
+    try:
+        import urequests
+        import network
+        wlan = network.WLAN(network.STA_IF)
+        if not wlan.isconnected():
+            return None
+        r = urequests.get("https://api.chucknorris.io/jokes/random")
+        data = json.loads(r.text)
+        r.close()
+        return data.get("value")
+    except Exception:
+        return None
 
 
 def setup_display():
@@ -105,17 +152,34 @@ def draw_timer(display, seconds_left):
     display.text("{:2d}".format(seconds_left), x + 5, y + 4, TIMER_COLOR, scale=2)
 
 
-def _pick_index(exclude_index):
-    index = random.randrange(len(QUOTES))
-    while index == exclude_index and len(QUOTES) > 1:
-        index = random.randrange(len(QUOTES))
-    return index
+def _pick_index(state, exclude_index):
+    """Return index of the quote with the lowest shown count, excluding exclude_index."""
+    quotes = state["quotes"]
+    counts = state["counts"]
+    n = len(quotes)
+
+    eligible = [i for i in range(n) if i != exclude_index] if n > 1 else list(range(n))
+
+    min_count = min(counts[i] for i in eligible)
+    candidates = [i for i in eligible if counts[i] == min_count]
+    return candidates[random.randrange(len(candidates))]
 
 
 def run_for(display, seconds, exclude_index=None):
-    """Show one random quote with a countdown timer for `seconds`, then return its index."""
-    quote_index = _pick_index(exclude_index)
-    draw_quote(display, QUOTES[quote_index])
+    """Show one quote (preferring low shown count) with countdown; return its index."""
+    state = _load_state()
+
+    if len(state["quotes"]) < MAX_CACHED_QUOTES:
+        fetched = _fetch_quote()
+        if fetched and fetched not in state["quotes"]:
+            state["quotes"].append(fetched)
+            state["counts"].append(0)
+
+    quote_index = _pick_index(state, exclude_index)
+    state["counts"][quote_index] += 1
+    _save_state(state)
+
+    draw_quote(display, state["quotes"][quote_index])
 
     seconds_left = seconds
     draw_timer(display, seconds_left)

@@ -33,5 +33,4 @@ def main():
         clock.run_for(display, CLOCK_SECONDS)
 
 
-if __name__ == "__main__":
-    main()
+main()
