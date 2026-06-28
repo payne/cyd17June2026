@@ -95,7 +95,7 @@ def _fetch_quote():
         wlan = network.WLAN(network.STA_IF)
         if not wlan.isconnected():
             return None
-        r = urequests.get("https://api.chucknorris.io/jokes/random")
+        r = urequests.get("https://api.chucknorris.io/jokes/random", timeout=5)
         data = json.loads(r.text)
         r.close()
         return data.get("value")
