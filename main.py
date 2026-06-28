@@ -27,9 +27,9 @@ def main():
         display.text("internal clock only", 10, 25, 0xF800)
         time.sleep(2)
 
-    last_quote_index = None
+    chuck.init()
     while True:
-        last_quote_index = chuck.run_for(display, CHUCK_SECONDS, exclude_index=last_quote_index)
+        chuck.step(display, CHUCK_SECONDS)
         clock.run_for(display, CLOCK_SECONDS)
 
 
